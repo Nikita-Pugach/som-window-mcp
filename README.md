@@ -4,6 +4,11 @@
 including one covered by other windows — without guessing from full-screen
 pixels, and without giving it a mouse.
 
+[![PyPI](https://img.shields.io/pypi/v/som-window-mcp)](https://pypi.org/project/som-window-mcp/)
+[![Python versions](https://img.shields.io/pypi/pyversions/som-window-mcp)](https://pypi.org/project/som-window-mcp/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![tests](https://github.com/Nikita-Pugach/som-window-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Nikita-Pugach/som-window-mcp/actions/workflows/ci.yml)
+
 > Status: **v0.3** — five read-only tools: window list, accessibility tree,
 > single-element inspection, plain capture, and the numbered Set-of-Mark overlay.
 
@@ -72,20 +77,24 @@ Three filters keep the overlay readable:
 
 ## Install
 
-Not on PyPI yet, so install from the repository:
-
 ```sh
-uv tool install git+https://github.com/Nikita-Pugach/som-window-mcp
+uvx som-window-mcp
 ```
 
-With pip instead:
+Or install the binary once:
 
 ```sh
-pip install "git+https://github.com/Nikita-Pugach/som-window-mcp"
+uv tool install som-window-mcp
 ```
 
-`uv tool install` places the `som-window-mcp` binary in `~/.local/bin`. If the
-command is not found afterwards, run `uv tool update-shell` once.
+`uv tool install` places `som-window-mcp` in `~/.local/bin`; run
+`uv tool update-shell` once if the command is not found afterwards.
+
+With pip:
+
+```sh
+pip install som-window-mcp
+```
 
 From a clone, for development:
 
@@ -203,7 +212,7 @@ managers and banking apps out of the loop.
 
 - `0.4` — optional actions (`--enable-actions`) in a **separate** package, so
   this core stays provably read-only
-- `0.5` — publish to PyPI, make `uvx som-window-mcp` the install line
+- `0.5` — `wait_for_element`, for UIs that settle slowly after a click
 
 ## Development
 
