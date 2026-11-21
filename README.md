@@ -72,18 +72,27 @@ Three filters keep the overlay readable:
 
 ## Install
 
-Not on PyPI yet, install from the repository:
+Not on PyPI yet, so install from the repository:
+
+```sh
+uv tool install git+https://github.com/Nikita-Pugach/som-window-mcp
+```
+
+With pip instead:
+
+```sh
+pip install "git+https://github.com/Nikita-Pugach/som-window-mcp"
+```
+
+`uv tool install` places the `som-window-mcp` binary in `~/.local/bin`. If the
+command is not found afterwards, run `uv tool update-shell` once.
+
+From a clone, for development:
 
 ```sh
 git clone https://github.com/Nikita-Pugach/som-window-mcp
 cd som-window-mcp
-uv tool install .        # or: pip install .
-```
-
-Or straight from git, without cloning:
-
-```sh
-pip install "git+https://github.com/Nikita-Pugach/som-window-mcp"
+uv tool install .
 ```
 
 ## Configure
