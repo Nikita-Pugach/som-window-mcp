@@ -7,6 +7,11 @@ pixels, and without giving it a mouse.
 > Status: **v0.3** — five read-only tools: window list, accessibility tree,
 > single-element inspection, plain capture, and the numbered Set-of-Mark overlay.
 
+![Explorer with every control numbered, captured while covered by other windows](docs/demo.gif)
+
+*One window, captured while it was covered by another. The marks come from the
+accessibility tree, not from OCR, so every number maps to an exact screen rect.*
+
 ## Why
 
 When you ask an agent to help with a desktop app, it has two bad options today:
