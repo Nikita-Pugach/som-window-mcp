@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "som-window-mcp"
+version = "0.1.0"
+description = "Read-only MCP server that lets AI agents see Windows desktop UI: window list, UI Automation tree, and occlusion-proof screenshots."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["mcp", "windows", "ui-automation", "uia", "screenshot", "ai-agents", "accessibility"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Software Development :: Testing",
+]
+dependencies = [
+    "mcp>=2,<3",
+    "pillow>=11",
+    "uiautomation>=2.0.29",
+]
+
+[project.scripts]
+som-window-mcp = "som_window_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/som_window_mcp"]

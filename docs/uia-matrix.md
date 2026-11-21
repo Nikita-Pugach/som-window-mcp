@@ -3,7 +3,7 @@
 Measured on Windows 11 (Russian locale), Python 3.12, `uiautomation` 2.0.29,
 per-monitor DPI awareness V2, non-elevated process.
 
-Method: `uia_probe.py` walks the UI Automation tree from the window root using
+Method: `research/uia_probe.py` walks the UI Automation tree from the window root using
 `GetChildren()`, depth-limited, and reports node counts and wall time. "interact"
 counts only control types that are worth marking for an agent (Button, Edit,
 TabItem, MenuItem, ListItem, CheckBox, ComboBox, TreeItem, Hyperlink, ...).

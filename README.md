@@ -1,0 +1,163 @@
+# som-window-mcp
+
+**Read-only eyes for Windows desktop UI.** Let an AI agent see a window —
+including one covered by other windows — without guessing from full-screen
+pixels, and without giving it a mouse.
+
+> Status: **v0.1** — three read-only tools. Numbered overlay (Set-of-Mark) and
+> element-level text extraction are next.
+
+## Why
+
+When you ask an agent to help with a desktop app, it has two bad options today:
+
+1. **Screenshot the whole screen.** Expensive in tokens, and it captures your
+   private windows along with the target one. If the app is behind your
+   terminal, the agent cannot see it at all.
+2. **Install a full desktop clicker.** That hands the model a mouse and a
+   keyboard. Any text on screen can then talk the model into pressing `Win+R`
+   and running something. It also tends to hang on blocked Windows calls.
+
+This server takes a third path: **look, never touch.** It reads the real Windows
+accessibility tree for structure, and `PrintWindow` for pixels, so a covered
+window still captures cleanly and only that window is in the image.
+
+## Tools
+
+| Tool | What it returns |
+|---|---|
+| `list_windows` | Visible windows: `hwnd`, process, physical-pixel rect, whether the window is covered (`occluded`), whether it needs an elevated server (`elevated`) |
+| `get_ui_tree` | Compact text list of interactive elements — path, type, name, automation id, screen rect — with zoomable `max_depth` / `max_nodes` |
+| `capture_window` | One window's pixels, even while covered, plus the screen position of image pixel `(0,0)` |
+
+There is no click, no typing, no mouse movement, and no code execution anywhere
+in this package.
+
+## Requirements
+
+- Windows 10/11 (x64)
+- Python 3.10+
+
+## Install
+
+Not on PyPI yet, install from source:
+
+```sh
+git clone https://github.com/Nikita-Pugach/som-window-mcp
+cd som-window-mcp
+uv tool install .        # or: pip install .
+```
+
+## Configure
+
+### OpenCode
+
+```sh
+opencode mcp add som-window --global -- som-window-mcp
+```
+
+Or by hand in `opencode.jsonc`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "som-window": {
+        "type": "local",
+        "command": ["som-window-mcp"],
+      },
+    },
+  },
+}
+```
+
+### Claude Code
+
+```sh
+claude mcp add som-window -- som-window-mcp
+```
+
+### Any other MCP client
+
+```json
+{
+  "mcpServers": {
+    "som-window": {
+      "command": "som-window-mcp"
+    }
+  }
+}
+```
+
+Running from a checkout instead of an installed package:
+
+```json
+{
+  "mcpServers": {
+    "som-window": {
+      "command": "python",
+      "args": ["-m", "som_window_mcp.server"],
+      "env": { "PYTHONPATH": "C:\\dev\\som-window-mcp\\src" }
+    }
+  }
+}
+```
+
+## Coordinate contract
+
+Everything is in **physical screen pixels**, and the server sets
+`PER_MONITOR_AWARE_V2` at startup, so coordinates match the screen on 100%,
+125%, 150% and mixed-DPI multi-monitor setups.
+
+`capture_window` reports `origin`: the screen coordinate of image pixel `(0,0)`.
+
+```text
+screen_x = origin_x + pixel_x
+screen_y = origin_y + pixel_y
+```
+
+That is what a clicker needs, and it is the reason the capture is cropped by
+`DWMWA_EXTENDED_FRAME_BOUNDS`: without the crop every image carries a 9 px black
+frame from the invisible DWM resize border and every coordinate is off.
+
+## Known limitations
+
+Measured, not guessed — see [`docs/uia-matrix.md`](docs/uia-matrix.md) for the
+raw numbers.
+
+| Case | Behaviour |
+|---|---|
+| Elevated window, non-elevated server | Windows blocks UIA across integrity levels. The tool says so explicitly instead of returning an empty tree. Run the server elevated to read it. |
+| Chrome, VS Code, Slack, Discord (Chromium/Electron) | No UI tree at all unless the app was started with `--force-renderer-accessibility` (8 nodes vs 173 measured). Screenshots work either way. |
+| Qt / Delphi apps | Partial or absent UIA tree. Screenshots still work. |
+| Minimised windows, some GPU surfaces | `PrintWindow` returns a blank frame; this is detected and reported instead of returning a useless image. |
+| Dense windows | About 2.5 ms per UIA node. Use `max_nodes`; a 4000-node walk takes ~10 s. |
+
+Read-only still means "sees your screen": captures are sent to your model
+provider. Use the window list to target a specific window, and keep password
+managers and banking apps out of the loop.
+
+## How it works
+
+- `win32.py` — DPI awareness, window enumeration (DWM cloaked filter),
+  `PrintWindow(PW_RENDERFULLCONTENT)`, `BGRX` decode to dodge the zero-alpha bug.
+- `uia_worker.py` — UI Automation runs in a **separate process**; a blocked COM
+  call cannot be cancelled by a thread timeout, so the parent kills the process.
+- `worker.py` — persistent worker with hard timeout and transparent respawn
+  (cold-importing `uiautomation` costs 1–2 s per call, so it stays alive).
+- `inspector.py` — window resolution and terse formatting. Ambiguous matches are
+  an error, never a silent first hit.
+- `capture.py` — blank-frame detection, downscale, smaller of PNG/JPEG.
+
+## Roadmap
+
+- `0.2` — numbered Set-of-Mark overlay (mark every interactive element on the
+  capture, legend maps number → element, rects stay machine-readable)
+- `0.3` — `inspect_element` for large tables and documents
+- `0.4` — optional `--enable-actions` in a **separate** package, so this core
+  stays provably read-only
+
+## License
+
+MIT
