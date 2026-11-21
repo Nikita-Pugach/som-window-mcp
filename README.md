@@ -72,12 +72,18 @@ Three filters keep the overlay readable:
 
 ## Install
 
-Not on PyPI yet, install from source:
+Not on PyPI yet, install from the repository:
 
 ```sh
 git clone https://github.com/Nikita-Pugach/som-window-mcp
 cd som-window-mcp
 uv tool install .        # or: pip install .
+```
+
+Or straight from git, without cloning:
+
+```sh
+pip install "git+https://github.com/Nikita-Pugach/som-window-mcp"
 ```
 
 ## Configure
