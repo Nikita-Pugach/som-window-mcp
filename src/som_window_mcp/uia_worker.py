@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import time
+from collections import deque
 
 # UIA returns physical pixels only for DPI-aware clients. This must happen
 # before the first UIA call.
@@ -118,12 +119,15 @@ def walk(hwnd: int, max_depth: int, max_nodes: int, include_text: bool) -> dict:
         "truncated": False,
     }
 
-    stack: list[tuple[object, str, int]] = [(root, "", 0)]
-    while stack:
+    # Breadth-first on purpose: with a fixed node budget, breadth reaches the
+    # shallow controls an agent actually wants (toolbars, tabs, list items)
+    # before depth-first disappears into the first menu's internals.
+    queue: deque[tuple[object, str, int]] = deque([(root, "", 0)])
+    while queue:
         if stats["visited"] >= max_nodes:
             stats["truncated"] = True
             break
-        ctrl, path, depth = stack.pop()
+        ctrl, path, depth = queue.popleft()
         stats["visited"] += 1
         stats["depth_reached"] = max(stats["depth_reached"], depth)
 
@@ -164,9 +168,9 @@ def walk(hwnd: int, max_depth: int, max_nodes: int, include_text: bool) -> dict:
             continue
         if not children:
             continue
-        for index in range(len(children) - 1, -1, -1):
+        for index in range(len(children)):
             child_path = f"{path}.{index}" if path else str(index)
-            stack.append((children[index], child_path, depth + 1))
+            queue.append((children[index], child_path, depth + 1))
 
     # Reading order beats tree order for a human or a vision model looking at
     # the same window.

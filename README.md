@@ -4,8 +4,8 @@
 including one covered by other windows — without guessing from full-screen
 pixels, and without giving it a mouse.
 
-> Status: **v0.1** — three read-only tools. Numbered overlay (Set-of-Mark) and
-> element-level text extraction are next.
+> Status: **v0.2** — four read-only tools, including the numbered Set-of-Mark
+> overlay. Element-level text extraction is next.
 
 ## Why
 
@@ -29,9 +29,35 @@ window still captures cleanly and only that window is in the image.
 | `list_windows` | Visible windows: `hwnd`, process, physical-pixel rect, whether the window is covered (`occluded`), whether it needs an elevated server (`elevated`) |
 | `get_ui_tree` | Compact text list of interactive elements — path, type, name, automation id, screen rect — with zoomable `max_depth` / `max_nodes` |
 | `capture_window` | One window's pixels, even while covered, plus the screen position of image pixel `(0,0)` |
+| `capture_som` | The same capture with a **numbered box on every interactive element**, plus a legend that maps each number to a real screen rect |
 
 There is no click, no typing, no mouse movement, and no code execution anywhere
 in this package.
+
+## Set-of-Mark
+
+`capture_som` draws a numbered box on each interactive control. The boxes come
+from the accessibility tree, not from OCR or a detector, so they are pixel-exact
+and the legend carries real coordinates:
+
+```text
+ 7   0.4.1  Button  "Открыть SDS"  @450,320 90x28
+```
+
+A vision model answers "7" instead of estimating a pixel; a clicker uses the
+rect and never looks at the image at all. Numbering follows reading order
+(top-to-bottom, left-to-right), and the tree is walked breadth-first so a fixed
+node budget reaches toolbars and lists before it disappears into one menu.
+
+Three filters keep the overlay readable:
+
+- **duplicates** — Windows Terminal exposes its caption buttons twice; overlapping
+  controls of similar size are collapsed to the named one
+- **cells inside rows** — Explorer reports four column values per list row; the
+  row is marked, its cells are not
+- **budget** — `max_marks` caps the count, and badge placement avoids collisions
+  (verified: zero overlapping badges on a 60-mark Explorer window)
+
 
 ## Requirements
 
@@ -148,15 +174,16 @@ managers and banking apps out of the loop.
   (cold-importing `uiautomation` costs 1–2 s per call, so it stays alive).
 - `inspector.py` — window resolution and terse formatting. Ambiguous matches are
   an error, never a silent first hit.
+- `overlay.py` — Set-of-Mark: de-duplication, containment suppression, reading
+  order, collision-free badge placement.
 - `capture.py` — blank-frame detection, downscale, smaller of PNG/JPEG.
 
 ## Roadmap
 
-- `0.2` — numbered Set-of-Mark overlay (mark every interactive element on the
-  capture, legend maps number → element, rects stay machine-readable)
 - `0.3` — `inspect_element` for large tables and documents
 - `0.4` — optional `--enable-actions` in a **separate** package, so this core
   stays provably read-only
+- tests for the pure logic (window resolution, formatting, overlay selection)
 
 ## License
 

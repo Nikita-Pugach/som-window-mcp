@@ -121,7 +121,7 @@ class UiaWorker:
     def tree(
         self,
         hwnd: int,
-        max_depth: int = 6,
+        max_depth: int = 8,
         max_nodes: int = 600,
         include_text: bool = False,
         timeout: float | None = None,

@@ -147,3 +147,40 @@ def format_tree(window: dict, result: dict) -> str:
             "truncated: budget reached. Raise max_nodes, or lower max_depth to focus."
         )
     return "\n".join(lines)
+
+
+def format_som(window: dict, marks: list, meta: dict) -> str:
+    """Legend for the numbered overlay. Numbers map to screen rects."""
+    lines = [
+        f'window: "{window["title"][:MAX_TITLE]}" ({window["process"]}, hwnd={window["hwnd"]})',
+        f"marks={len(marks)} of {meta.get('interactive', len(marks))} interactive elements "
+        f"(visited={meta.get('visited', 0)}, {meta.get('elapsed_ms', 0)}ms)"
+        + ("  truncated" if meta.get("truncated") else ""),
+    ]
+    if window["occluded"]:
+        lines.append("note: window is covered by another window (capture is still valid).")
+    lines.append('')
+    for mark in marks:
+        node = mark.node
+        name = node.get("name") or "<noname>"
+        if len(name) > MAX_NAME:
+            name = name[:MAX_NAME] + "..."
+        rect = node["rect"]
+        extras = []
+        if node.get("id"):
+            extras.append(f"id={node['id']}")
+        if node.get("value"):
+            extras.append(f'value="{node["value"][:40]}"')
+        if node.get("enabled") is False:
+            extras.append("disabled")
+        suffix = ("  " + " ".join(extras)) if extras else ""
+        lines.append(
+            f"{mark.number:>2}  {node['path']:<9} {node['type']:<13} \"{name}\" "
+            f"@{rect[0]},{rect[1]} {rect[2]}x{rect[3]}{suffix}"
+        )
+    lines.append('')
+    lines.append(
+        "Answer by mark number. The rects above are screen coordinates, so a "
+        "clicker can act on them without reading the image at all."
+    )
+    return "\n".join(lines)
