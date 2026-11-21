@@ -33,11 +33,18 @@ still work); minimised windows and some GPU surfaces capture blank.
 
 mcp = MCPServer(
     "som-window-mcp",
-    version="0.3.0",
+    version="0.3.1",
     instructions=INSTRUCTIONS,
 )
 
 _worker = UiaWorker()
+
+WINDOWS_ONLY = (
+    "som-window-mcp only works on Windows 10/11: it reads Windows UI Automation "
+    "and captures windows through Win32 APIs. Install it on a Windows machine. "
+    "(The package still installs and starts elsewhere so registries can list its "
+    "tools.)"
+)
 
 
 def _log(message: str) -> None:
@@ -76,6 +83,8 @@ def list_windows(include_desktop: bool = False) -> str:
     Use the hwnd with get_ui_tree and capture_window. hwnds are stable for the
     lifetime of a window but change when the app is restarted.
     """
+    if not win32.IS_WINDOWS:
+        return WINDOWS_ONLY
     windows = win32.list_windows(include_desktop=include_desktop)
     if not windows:
         return "no visible windows found"
@@ -111,6 +120,8 @@ def get_ui_tree(
     Read-only. If the window runs elevated while this server does not, Windows
     blocks UIA and the tool reports that instead of returning an empty tree.
     """
+    if not win32.IS_WINDOWS:
+        return WINDOWS_ONLY
     windows = win32.list_windows()
     match, error = inspector.resolve_window(window, windows)
     if error:
@@ -151,6 +162,8 @@ def inspect_element(window: str, path: str, max_chars: int = 4000) -> str:
     Paths are positional: if the UI changed between calls, call get_ui_tree
     again. Read-only.
     """
+    if not win32.IS_WINDOWS:
+        return WINDOWS_ONLY
     windows = win32.list_windows()
     match, error = inspector.resolve_window(window, windows)
     if error:
@@ -191,6 +204,8 @@ def capture_window(window: str, max_side: int = 1600) -> list:
     Read-only. Minimised windows and some GPU-rendered surfaces capture blank,
     which is reported instead of a useless image.
     """
+    if not win32.IS_WINDOWS:
+        return [WINDOWS_ONLY]
     windows = win32.list_windows()
     match, error = inspector.resolve_window(window, windows)
     if error:
@@ -244,6 +259,8 @@ def capture_som(window: str, max_marks: int = 60, max_side: int = 1600) -> list:
     Falls back to a plain unmarked capture with an explanation when the window
     exposes no UI tree (Chromium/Electron without --force-renderer-accessibility).
     """
+    if not win32.IS_WINDOWS:
+        return [WINDOWS_ONLY]
     windows = win32.list_windows()
     match, error = inspector.resolve_window(window, windows)
     if error:

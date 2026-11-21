@@ -9,10 +9,51 @@ from __future__ import annotations
 
 import ctypes
 import os
-from ctypes import wintypes as wt
 from dataclasses import dataclass
 
 from PIL import Image
+
+IS_WINDOWS = os.name == "nt"
+
+try:  # ctypes.wintypes only exists on Windows; the fallback just type-checks.
+    from ctypes import wintypes as wt
+except Exception:  # pragma: no cover - non-Windows
+
+    class _FallbackPoint(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+    class _FallbackWintypes:
+        DWORD = ctypes.c_ulong
+        WORD = ctypes.c_ushort
+        UINT = ctypes.c_uint
+        BOOL = ctypes.c_int
+        LONG = ctypes.c_long
+        HWND = ctypes.c_void_p
+        HDC = ctypes.c_void_p
+        HANDLE = ctypes.c_void_p
+        LPARAM = ctypes.c_ssize_t
+        LPWSTR = ctypes.c_wchar_p
+        POINT = _FallbackPoint
+
+    wt = _FallbackWintypes()
+
+
+class _Unavailable:
+    """Stand-in for the Win32 DLLs on other platforms.
+
+    Attribute access returns another stub, so the module-level `argtypes = ...`
+    declarations still execute; calling anything raises. That is what lets a
+    package index install this server, start it and read its tool list on Linux
+    while every tool refuses to run there - the same pattern other Windows-only
+    MCP servers use for directory scanners.
+    """
+
+    def __getattr__(self, name):
+        return _Unavailable()
+
+    def __call__(self, *args, **kwargs):
+        raise RuntimeError("som-window-mcp requires Windows 10/11")
+
 
 # --------------------------------------------------------------------------
 # DPI awareness must be set before any window or DC exists. UIA rects,
@@ -20,25 +61,29 @@ from PIL import Image
 # per-monitor aware; otherwise everything is off by 25% on 150% displays.
 # --------------------------------------------------------------------------
 PER_MONITOR_AWARE_V2 = -4
-try:
-    DPI_AWARENESS_OK = bool(
-        ctypes.windll.user32.SetProcessDpiAwarenessContext(
-            ctypes.c_void_p(PER_MONITOR_AWARE_V2)
-        )
-    )
-except Exception:  # pragma: no cover - older Windows
+if IS_WINDOWS:
     try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)
-        DPI_AWARENESS_OK = True
-    except Exception:
-        ctypes.windll.user32.SetProcessDPIAware()
-        DPI_AWARENESS_OK = True
+        DPI_AWARENESS_OK = bool(
+            ctypes.windll.user32.SetProcessDpiAwarenessContext(
+                ctypes.c_void_p(PER_MONITOR_AWARE_V2)
+            )
+        )
+    except Exception:  # pragma: no cover - older Windows
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            DPI_AWARENESS_OK = True
+        except Exception:
+            ctypes.windll.user32.SetProcessDPIAware()
+            DPI_AWARENESS_OK = True
 
-user32 = ctypes.windll.user32
-gdi32 = ctypes.windll.gdi32
-dwmapi = ctypes.windll.dwmapi
-kernel32 = ctypes.windll.kernel32
-advapi32 = ctypes.windll.advapi32
+    user32 = ctypes.windll.user32
+    gdi32 = ctypes.windll.gdi32
+    dwmapi = ctypes.windll.dwmapi
+    kernel32 = ctypes.windll.kernel32
+    advapi32 = ctypes.windll.advapi32
+else:  # pragma: no cover - non-Windows
+    DPI_AWARENESS_OK = False
+    user32 = gdi32 = dwmapi = kernel32 = advapi32 = _Unavailable()
 
 DWMWA_EXTENDED_FRAME_BOUNDS = 9
 DWMWA_CLOAKED = 14
@@ -105,7 +150,11 @@ class TOKEN_ELEVATION(ctypes.Structure):
     _fields_ = [("TokenIsElevated", wt.DWORD)]
 
 
-WNDENUMPROC = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+if hasattr(ctypes, "WINFUNCTYPE"):
+    WNDENUMPROC = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+else:  # pragma: no cover - non-Windows
+    def WNDENUMPROC(callback):
+        return callback
 
 user32.EnumWindows.argtypes = [WNDENUMPROC, wt.LPARAM]
 user32.IsWindowVisible.argtypes = [wt.HWND]
