@@ -58,6 +58,9 @@ INTERACTIVE = {
     "Thumb",
     "Document",
 }
+# Containers worth addressable by path, for inspect_element: a table or a long
+# list is better read in full than numbered row by row.
+CONTAINER_TYPES = {"List", "Tree", "Table", "DataGrid", "Document"}
 # Leaf types that are not worth descending into: pruning them saves a
 # surprising number of cross-process calls on text-heavy windows.
 PRUNE = {"Text", "Image", "ScrollBar"}
@@ -94,7 +97,13 @@ def rect_of(ctrl) -> list[int] | None:
     return [rect.left, rect.top, width, height]
 
 
-def walk(hwnd: int, max_depth: int, max_nodes: int, include_text: bool) -> dict:
+def walk(
+    hwnd: int,
+    max_depth: int,
+    max_nodes: int,
+    include_text: bool,
+    include_containers: bool = False,
+) -> dict:
     started = time.perf_counter()
     try:
         import uiautomation as auto
@@ -122,15 +131,7 @@ def walk(hwnd: int, max_depth: int, max_nodes: int, include_text: bool) -> dict:
     # Breadth-first on purpose: with a fixed node budget, breadth reaches the
     # shallow controls an agent actually wants (toolbars, tabs, list items)
     # before depth-first disappears into the first menu's internals.
-    queue: deque[tuple[object, str, int]] = deque([(root, "", 0)])
-    while queue:
-        if stats["visited"] >= max_nodes:
-            stats["truncated"] = True
-            break
-        ctrl, path, depth = queue.popleft()
-        stats["visited"] += 1
-        stats["depth_reached"] = max(stats["depth_reached"], depth)
-
+    for ctrl, path, depth in iter_nodes(root, max_depth, max_nodes, stats):
         kind = control_type(ctrl)
         name = (safe(lambda: ctrl.Name, "") or "").strip()
         rect = rect_of(ctrl)
@@ -138,7 +139,11 @@ def walk(hwnd: int, max_depth: int, max_nodes: int, include_text: bool) -> dict:
             stats["no_rect"] += 1
 
         if rect is not None:
-            wanted = kind in INTERACTIVE or (include_text and name)
+            wanted = (
+                kind in INTERACTIVE
+                or (include_text and name)
+                or (include_containers and kind in CONTAINER_TYPES)
+            )
             if wanted:
                 if not name:
                     stats["no_name"] += 1
@@ -159,19 +164,6 @@ def walk(hwnd: int, max_depth: int, max_nodes: int, include_text: bool) -> dict:
                 nodes.append(node)
                 stats["emitted"] += 1
 
-        if depth >= max_depth or kind in PRUNE:
-            continue
-        try:
-            children = ctrl.GetChildren()
-        except Exception:
-            stats["errors"] += 1
-            continue
-        if not children:
-            continue
-        for index in range(len(children)):
-            child_path = f"{path}.{index}" if path else str(index)
-            queue.append((children[index], child_path, depth + 1))
-
     # Reading order beats tree order for a human or a vision model looking at
     # the same window.
     nodes.sort(key=lambda n: (n["rect"][1], n["rect"][0]))
@@ -188,6 +180,130 @@ def walk(hwnd: int, max_depth: int, max_nodes: int, include_text: bool) -> dict:
     }
 
 
+def iter_nodes(root, max_depth: int, max_nodes: int, stats: dict):
+    """Yield (control, path, depth) breadth-first, updating `stats`."""
+    queue: deque[tuple[object, str, int]] = deque([(root, "", 0)])
+    while queue:
+        if stats["visited"] >= max_nodes:
+            stats["truncated"] = True
+            return
+        ctrl, path, depth = queue.popleft()
+        stats["visited"] += 1
+        stats["depth_reached"] = max(stats["depth_reached"], depth)
+        yield ctrl, path, depth
+
+        kind = control_type(ctrl)
+        if depth >= max_depth or kind in PRUNE:
+            continue
+        try:
+            children = ctrl.GetChildren()
+        except Exception:
+            stats["errors"] += 1
+            continue
+        if not children:
+            continue
+        for index in range(len(children)):
+            child_path = f"{path}.{index}" if path else str(index)
+            queue.append((children[index], child_path, depth + 1))
+
+
+def _text_of(ctrl, max_chars: int) -> str | None:
+    """Best-effort text extraction, cheapest pattern first."""
+    value = safe(lambda: ctrl.GetValuePattern().Value)
+    if value:
+        return str(value)[:max_chars]
+    try:
+        pattern = ctrl.GetTextPattern()
+    except Exception:
+        pattern = None
+    if pattern is not None:
+        text = safe(lambda: pattern.GetText(max_chars))
+        if text:
+            return str(text)[:max_chars]
+    legacy = safe(lambda: ctrl.GetLegacyIAccessiblePattern().Value)
+    if legacy:
+        return str(legacy)[:max_chars]
+    return None
+
+
+def element(hwnd: int, path: str, max_depth: int, max_nodes: int, max_chars: int) -> dict:
+    """Describe a single element addressed by a path from `walk`."""
+    started = time.perf_counter()
+    try:
+        import uiautomation as auto
+    except Exception as exc:  # pragma: no cover
+        return {"ok": False, "error": f"uiautomation import failed: {exc}"}
+
+    try:
+        root = auto.ControlFromHandle(hwnd)
+    except Exception as exc:
+        return {"ok": False, "error": f"ControlFromHandle failed: {exc}"}
+    if root is None:
+        return {"ok": False, "error": "no UI Automation root for this window"}
+
+    wanted = path if path not in ("", "root") else ""
+    stats = {"visited": 0, "errors": 0, "depth_reached": 0, "truncated": False}
+
+    target = None
+    for ctrl, node_path, _depth in iter_nodes(root, max_depth, max_nodes, stats):
+        if node_path == wanted:
+            target = ctrl
+            break
+    if target is None:
+        return {
+            "ok": False,
+            "error": (
+                f"no element at path {path!r} within depth {max_depth} and "
+                f"{stats['visited']} visited nodes - the UI may have changed; "
+                "call get_ui_tree again"
+            ),
+        }
+
+    kind = control_type(target)
+    info = {
+        "path": path or "root",
+        "type": kind,
+        "name": (safe(lambda: target.Name, "") or "")[:MAX_NAME],
+        "id": safe(lambda: target.AutomationId, "") or "",
+        "class": safe(lambda: target.ClassName, "") or "",
+        "rect": rect_of(target),
+        "enabled": safe(lambda: target.IsEnabled, None),
+        "offscreen": safe(lambda: target.IsOffscreen, None),
+    }
+
+    text = _text_of(target, max_chars)
+    if text:
+        info["text"] = text
+        info["text_truncated"] = len(text) >= max_chars
+
+    children: list[dict] = []
+    try:
+        raw_children = target.GetChildren()
+    except Exception:
+        raw_children = []
+    for child in raw_children[:80]:
+        rect = rect_of(child)
+        children.append(
+            {
+                "type": control_type(child),
+                "name": (safe(lambda c=child: c.Name, "") or "")[:MAX_NAME],
+                "id": safe(lambda c=child: c.AutomationId, "") or "",
+                "rect": rect,
+            }
+        )
+
+    return {
+        "ok": True,
+        "element": info,
+        "children": children,
+        "child_count": len(raw_children),
+        "meta": {
+            **stats,
+            "elapsed_ms": round((time.perf_counter() - started) * 1000, 1),
+        },
+    }
+
+
 def handle(request: dict) -> dict:
     cmd = request.get("cmd")
     if cmd == "ping":
@@ -198,9 +314,21 @@ def handle(request: dict) -> dict:
             return {"ok": False, "error": "tree requires an integer hwnd"}
         return walk(
             hwnd,
-            max_depth=int(request.get("max_depth", 6)),
+            max_depth=int(request.get("max_depth", 8)),
             max_nodes=int(request.get("max_nodes", 600)),
             include_text=bool(request.get("include_text", False)),
+            include_containers=bool(request.get("include_containers", False)),
+        )
+    if cmd == "element":
+        hwnd = request.get("hwnd")
+        if not isinstance(hwnd, int):
+            return {"ok": False, "error": "element requires an integer hwnd"}
+        return element(
+            hwnd,
+            str(request.get("path", "")),
+            max_depth=int(request.get("max_depth", 8)),
+            max_nodes=int(request.get("max_nodes", 600)),
+            max_chars=int(request.get("max_chars", 4000)),
         )
     return {"ok": False, "error": f"unknown command {cmd!r}"}
 

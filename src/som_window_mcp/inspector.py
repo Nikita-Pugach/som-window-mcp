@@ -149,6 +149,64 @@ def format_tree(window: dict, result: dict) -> str:
     return "\n".join(lines)
 
 
+def format_element(window: dict, result: dict) -> str:
+    """Detailed view of one element: value, text, and its immediate children."""
+    element = result.get("element", {})
+    meta = result.get("meta", {})
+    rect = element.get("rect") or [0, 0, 0, 0]
+    name = element.get("name") or "<noname>"
+    lines = [
+        f'window: "{window["title"][:MAX_TITLE]}" ({window["process"]}, hwnd={window["hwnd"]})',
+        f'element: {element.get("type", "?")} "{name[:MAX_NAME]}" path={element.get("path")} '
+        f"@{rect[0]},{rect[1]} {rect[2]}x{rect[3]}",
+    ]
+
+    extras = []
+    if element.get("id"):
+        extras.append(f"id={element['id']}")
+    if element.get("class"):
+        extras.append(f"class={element['class']}")
+    if element.get("enabled") is False:
+        extras.append("disabled")
+    if element.get("offscreen"):
+        extras.append("offscreen")
+    if extras:
+        lines.append("  " + " ".join(extras))
+
+    text = element.get("text")
+    if text:
+        lines.append("")
+        lines.append(
+            "text:" + (" (truncated by max_chars)" if element.get("text_truncated") else "")
+        )
+        # Keep the output bounded even when the control holds a whole document.
+        text_lines = text.splitlines()
+        lines.extend(text_lines[:60])
+        if len(text_lines) > 60:
+            lines.append(f"... {len(text_lines) - 60} more lines")
+
+    children = result.get("children") or []
+    if children:
+        total = result.get("child_count", len(children))
+        lines.append("")
+        lines.append(f"children: {total} (showing {min(len(children), 40)})")
+        for child in children[:40]:
+            child_rect = child.get("rect") or [0, 0, 0, 0]
+            child_name = (child.get("name") or "<noname>")[:MAX_NAME]
+            lines.append(
+                f"  {child.get('type', '?'):<12} \"{child_name}\" "
+                f"@{child_rect[0]},{child_rect[1]} {child_rect[2]}x{child_rect[3]}"
+            )
+        if len(children) > 40:
+            lines.append(f"  ... {len(children) - 40} more")
+
+    lines.append("")
+    lines.append(
+        f"visited={meta.get('visited', 0)} nodes, {meta.get('elapsed_ms', 0)}ms"
+    )
+    return "\n".join(lines)
+
+
 def format_som(window: dict, marks: list, meta: dict) -> str:
     """Legend for the numbered overlay. Numbers map to screen rects."""
     lines = [

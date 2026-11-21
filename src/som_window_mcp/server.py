@@ -33,7 +33,7 @@ still work); minimised windows and some GPU surfaces capture blank.
 
 mcp = MCPServer(
     "som-window-mcp",
-    version="0.2.0",
+    version="0.3.0",
     instructions=INSTRUCTIONS,
 )
 
@@ -88,6 +88,7 @@ def get_ui_tree(
     max_depth: int = 8,
     max_nodes: int = 600,
     include_text: bool = False,
+    include_containers: bool = False,
 ) -> str:
     """Read the UI Automation tree of one window as a compact text list.
 
@@ -103,7 +104,9 @@ def get_ui_tree(
     Explorer hides the file list at depth 6). max_nodes caps the walk: dense
     windows cost about 2.5 ms per node, so raise it deliberately.
     include_text also lists static text elements, which is useful for reading
-    labels and status messages.
+    labels and status messages. include_containers adds List/Tree/Table/DataGrid
+    nodes: their paths are what inspect_element expects when you want to read a
+    whole table or list instead of numbering every row.
 
     Read-only. If the window runs elevated while this server does not, Windows
     blocks UIA and the tool reports that instead of returning an empty tree.
@@ -124,11 +127,52 @@ def get_ui_tree(
             max_depth=max(0, min(max_depth, 12)),
             max_nodes=max(10, min(max_nodes, 20000)),
             include_text=include_text,
+            include_containers=include_containers,
         )
     except WorkerError as exc:
         return f"UI Automation failed: {exc}"
 
     return inspector.format_tree(match, result)
+
+
+@mcp.tool()
+def inspect_element(window: str, path: str, max_chars: int = 4000) -> str:
+    """Read the full content of one element, identified by a path.
+
+    Call get_ui_tree first, then pass the path of the element you care about
+    (for example "0.4.0.1"). Use this for elements that hold a lot of content -
+    a document, a table, a long list, an edit field - where numbering every row
+    would waste the whole mark budget.
+
+    Returns the element's type, name, screen rect, its value or text (up to
+    max_chars), and a summary of its immediate children. That child summary is
+    usually enough to understand a table without capturing or marking it.
+
+    Paths are positional: if the UI changed between calls, call get_ui_tree
+    again. Read-only.
+    """
+    windows = win32.list_windows()
+    match, error = inspector.resolve_window(window, windows)
+    if error:
+        return error
+    assert match is not None
+
+    problem = _elevation_problem(match)
+    if problem:
+        return problem
+
+    try:
+        result = _worker.element(
+            match["hwnd"],
+            path,
+            max_depth=8,
+            max_nodes=600,
+            max_chars=max(100, min(max_chars, 50000)),
+        )
+    except WorkerError as exc:
+        return f"UI Automation failed: {exc}"
+
+    return inspector.format_element(match, result)
 
 
 @mcp.tool(structured_output=False)

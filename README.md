@@ -4,8 +4,8 @@
 including one covered by other windows — without guessing from full-screen
 pixels, and without giving it a mouse.
 
-> Status: **v0.2** — four read-only tools, including the numbered Set-of-Mark
-> overlay. Element-level text extraction is next.
+> Status: **v0.3** — five read-only tools: window list, accessibility tree,
+> single-element inspection, plain capture, and the numbered Set-of-Mark overlay.
 
 ## Why
 
@@ -28,6 +28,7 @@ window still captures cleanly and only that window is in the image.
 |---|---|
 | `list_windows` | Visible windows: `hwnd`, process, physical-pixel rect, whether the window is covered (`occluded`), whether it needs an elevated server (`elevated`) |
 | `get_ui_tree` | Compact text list of interactive elements — path, type, name, automation id, screen rect — with zoomable `max_depth` / `max_nodes` |
+| `inspect_element` | Full content of one element by path: value, bounded text, and a summary of its immediate children |
 | `capture_window` | One window's pixels, even while covered, plus the screen position of image pixel `(0,0)` |
 | `capture_som` | The same capture with a **numbered box on every interactive element**, plus a legend that maps each number to a real screen rect |
 
@@ -180,10 +181,19 @@ managers and banking apps out of the loop.
 
 ## Roadmap
 
-- `0.3` — `inspect_element` for large tables and documents
-- `0.4` — optional `--enable-actions` in a **separate** package, so this core
-  stays provably read-only
-- tests for the pure logic (window resolution, formatting, overlay selection)
+- `0.4` — optional actions (`--enable-actions`) in a **separate** package, so
+  this core stays provably read-only
+- `0.5` — publish to PyPI, make `uvx som-window-mcp` the install line
+
+## Development
+
+```sh
+pip install -e ".[dev]"
+pytest
+```
+
+The unit tests cover window resolution, formatting, overlay selection and
+encoding. They do not touch Win32, so they run in a quarter of a second.
 
 ## License
 

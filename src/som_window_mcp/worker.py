@@ -124,6 +124,7 @@ class UiaWorker:
         max_depth: int = 8,
         max_nodes: int = 600,
         include_text: bool = False,
+        include_containers: bool = False,
         timeout: float | None = None,
     ) -> dict:
         return self.request(
@@ -133,6 +134,28 @@ class UiaWorker:
                 "max_depth": max_depth,
                 "max_nodes": max_nodes,
                 "include_text": include_text,
+                "include_containers": include_containers,
+            },
+            timeout=timeout,
+        )
+
+    def element(
+        self,
+        hwnd: int,
+        path: str,
+        max_depth: int = 8,
+        max_nodes: int = 600,
+        max_chars: int = 4000,
+        timeout: float | None = None,
+    ) -> dict:
+        return self.request(
+            {
+                "cmd": "element",
+                "hwnd": hwnd,
+                "path": path,
+                "max_depth": max_depth,
+                "max_nodes": max_nodes,
+                "max_chars": max_chars,
             },
             timeout=timeout,
         )
