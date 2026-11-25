@@ -8,6 +8,7 @@ pixels, and without giving it a mouse.
 [![Python versions](https://img.shields.io/pypi/pyversions/som-window-mcp)](https://pypi.org/project/som-window-mcp/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![tests](https://github.com/Nikita-Pugach/som-window-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Nikita-Pugach/som-window-mcp/actions/workflows/ci.yml)
+[![Nikita-Pugach/som-window-mcp MCP server](https://glama.ai/mcp/servers/Nikita-Pugach/som-window-mcp/badges/score.svg)](https://glama.ai/mcp/servers/Nikita-Pugach/som-window-mcp)
 
 > Status: **v0.3** — five read-only tools: window list, accessibility tree,
 > single-element inspection, plain capture, and the numbered Set-of-Mark overlay.
